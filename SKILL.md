@@ -8,11 +8,11 @@ agent_created: true
 
 让接手对话获得当前成果、有效决定和明确的第一步，避免重复说明与两边同时修改。提醒、保存、新建接续是不同动作，不互相授权。
 
-> **与原 Codex 版的区别（重要）**：原版依赖 Codex 专属能力——跨任务 thread 类 API（如新建 / 列出 / 向子对话发消息）与基于压缩 / 停止 Hook 的 Python 压缩计数器脚本。WorkBuddy 两者都没有。本版用 **WorkBuddy 原生记忆系统（自动注入）+ agent 在阶段切换时自主评估** 实现等价效果，零外部脚本、零宿主 Hook 依赖。原版的脚本目录、Hook 模板与压缩计数说明在本版中已移除。
+> **与原 Codex 版的区别（重要）**：原版依赖 Codex 专属能力——跨任务 thread 类 API（如新建 / 列出 / 向子对话发消息）与基于 `PostCompact`/`Stop` Hook 的 Python 压缩计数器脚本。WorkBuddy 没有跨对话 thread API，但有**原生 Hook 系统（含 `PreCompact` 上下文压缩前事件）**与**原生记忆系统**。本版做法：① 用原生记忆系统（自动注入）替代 thread API 实现「自动接续」；② 用 `PreCompact` Hook（`hooks/precompact_reminder.py` + 在 `~/.codebuddy/settings.json` 注册）重建「压缩前自动提醒」，等价于原版压缩提醒；③ agent 在阶段切换时仍会自主评估。无外部 Python 计数脚本、无 Codex 专属依赖。原版的 `scripts/compaction_reminder.py`、`hooks/codex-hooks.example.json`、`references/compaction-reminder.md` 已移除，改为 WorkBuddy 版 `hooks/`。
 
 ## 入口
 
-- **提醒检查**：准备交付可独立验收的阶段、进入下一大段工作、或判断上下文即将被压缩时，按"评估"节自检。纯问答、无后续、仅讨论本 Skill 不提醒。
+- **提醒检查**：准备交付可独立验收的阶段、进入下一大段工作、或判断上下文即将被压缩时，按"评估"节自检。（若已启用 PreCompact Hook，压缩前还会自动弹出系统提醒）纯问答、无后续、仅讨论本 Skill 不提醒。
 - **仅保存**：用户明确要求保存进度、整理交接，或说"保存进度 / 交接一下 / 整理项目状态"时，读 [保存、恢复与手动接续](references/handoff.md)，执行保存。笼统的"交接一下"不扩展为新建对话。
 - **完整交接**：用户明确要求"接着做 / 换对话继续"，或确认了"保存并在新对话继续"的具体提议时，读同一附页，执行保存；接续动作由用户在新对话发起（见附页"手动接续"）。
 - **恢复／查看**：指定交接来源并要求继续时执行恢复；只要求查看时只读。
@@ -47,6 +47,33 @@ WorkBuddy 没有跨对话 thread API，但有原生记忆系统——新对话�
 - 用户在**新对话**中直接说"继续 <项目名>"，WorkBuddy 从记忆读到索引并 Read `PROJECT_STATE.md` 接手——等价于原版的"自动接续"，但无需任何宿主 API。
 
 详见 [保存、恢复与手动接续](references/handoff.md)。
+
+## 可选：PreCompact 自动提醒 Hook（增强）
+
+本版附带一个 `PreCompact` Hook（`hooks/precompact_reminder.py`），在 WorkBuddy **即将压缩上下文前**自动：
+- 向**你**弹出系统提示，建议先「保存进度 / 交接一下」；
+- 向 **Agent** 注入压缩指导，确保压缩后仍保留项目目标、关键决策、文件路径与下一步。
+
+等价还原了原 Codex 版的「压缩前自动提醒」，但实现更轻（仅一个标准库 Python 脚本，零第三方依赖）。
+
+启用方式（用户级，全项目生效）：把下面内容写入 `~/.codebuddy/settings.json`（已附 `hooks/workbuddy-hooks.example.json` 可直接参考；注意目录名是 `codebuddy` 不是 `workbuddy`）：
+
+```json
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "C:/Users/91533/.workbuddy/binaries/python/versions/3.13.12/python.exe C:/Users/91533/.workbuddy/skills/project-handoff/hooks/precompact_reminder.py", "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`matcher` 留空匹配 auto / manual 两种压缩触发。Windows 下 Hook 以 Git Bash 运行，命令用 `C:/...` 盘符写法（Git Bash 不会误转换）。Hook 只「提醒」，不自动保存——遵守本 Skill「提醒不会自动执行交接」原则。
 
 ## 去重与用户回应
 

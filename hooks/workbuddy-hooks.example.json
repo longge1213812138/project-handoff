@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/91533/.workbuddy/binaries/python/versions/3.13.12/python.exe C:/Users/91533/.workbuddy/skills/project-handoff/hooks/precompact_reminder.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
